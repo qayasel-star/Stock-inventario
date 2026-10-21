@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar el codigo
+      - name: Descargar repositorio
         uses: actions/checkout@v4
 
       - name: Configurar Java 17
@@ -24,18 +24,57 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Instalar Gradle 8.9
+      - name: Configurar Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Compilar APK
-        run: gradle --no-daemon assembleDebug
+      - name: Localizar o extraer proyecto Android
+        shell: bash
+        run: |
+          set -e
 
-      - name: Publicar APK
+          PROJECT_DIR=$(find . \
+            -type f \
+            -name settings.gradle.kts \
+            -not -path './.git/*' \
+            -print -quit | xargs -r dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            ZIP_FILE=$(find . -maxdepth 3 \
+              -type f \
+              -name 'StockPro_Android*.zip' \
+              -print -quit)
+
+            if [ -z "$ZIP_FILE" ]; then
+              echo "ERROR: No se encontró el proyecto ni el ZIP Android."
+              echo "Sube el ZIP StockPro_Android_Migracion_Fase6.zip al repositorio."
+              exit 1
+            fi
+
+            mkdir -p "$RUNNER_TEMP/stockpro-src"
+            unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/stockpro-src"
+
+            PROJECT_DIR=$(find "$RUNNER_TEMP/stockpro-src" \
+              -type f \
+              -name settings.gradle.kts \
+              -print -quit | xargs -r dirname)
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: El ZIP no contiene settings.gradle.kts."
+            exit 1
+          fi
+
+          echo "Proyecto localizado en: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Compilar APK
+        run: gradle --no-daemon -p "$PROJECT_DIR" assembleDebug
+
+      - name: Guardar APK compilada
         uses: actions/upload-artifact@v4
         with:
           name: StockPro-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          
