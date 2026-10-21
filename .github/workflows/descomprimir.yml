@@ -1,0 +1,57 @@
+name: Descomprimir StockPro
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  descomprimir:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Buscar y descomprimir ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP=$(find . -type f \
+            -iname "StockPro_Visual_Moderno_v1_6.zip" \
+            -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No se encontró el archivo ZIP."
+            exit 1
+          fi
+
+          echo "Descomprimiendo: $ZIP"
+
+          mkdir -p /tmp/stockpro
+          unzip -o "$ZIP" -d /tmp/stockpro
+
+          # Copiar el contenido extraído a la raíz del repositorio
+          cp -a /tmp/stockpro/. .
+
+          # Eliminar el ZIP original después de extraerlo
+          rm -f "$ZIP"
+
+      - name: Guardar cambios en GitHub
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios que guardar."
+            exit 0
+          fi
+
+          git commit -m "Descomprimir proyecto StockPro"
+          git push
